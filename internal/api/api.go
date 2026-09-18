@@ -2,24 +2,39 @@ package api
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
+	"time"
 
+	"github.com/cko-recruitment/payment-gateway-challenge-go/internal/bank"
+	"github.com/cko-recruitment/payment-gateway-challenge-go/internal/config"
+	"github.com/cko-recruitment/payment-gateway-challenge-go/internal/handlers"
+	"github.com/cko-recruitment/payment-gateway-challenge-go/internal/platform"
 	"github.com/cko-recruitment/payment-gateway-challenge-go/internal/repository"
+	"github.com/cko-recruitment/payment-gateway-challenge-go/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"golang.org/x/sync/errgroup"
 )
 
 type Api struct {
-	router       *chi.Mux
-	paymentsRepo *repository.PaymentsRepository
+	router          *chi.Mux
+	logger          *slog.Logger
+	paymentsHandler *handlers.PaymentsHandler
 }
 
-func New() *Api {
-	a := &Api{}
-	a.paymentsRepo = repository.NewPaymentsRepository()
+func New(cfg config.Config) *Api {
+	logger := platform.NewLogger(cfg.LogLevel)
+
+	bankClient := bank.NewHTTPClient(cfg.BankBaseURL, cfg.BankTimeout)
+	paymentsRepo := repository.NewPaymentsRepository()
+	paymentsService := service.NewPaymentService(paymentsRepo, bankClient)
+
+	a := &Api{
+		logger:          logger,
+		paymentsHandler: handlers.NewPaymentsHandler(paymentsService),
+	}
 	a.setupRouter()
 
 	return a
@@ -36,12 +51,16 @@ func (a *Api) Run(ctx context.Context, addr string) error {
 
 	g.Go(func() error {
 		<-ctx.Done()
-		fmt.Printf("shutting down HTTP server\n")
-		return httpServer.Shutdown(ctx)
+		a.logger.Info("shutting down HTTP server")
+
+		// Fresh context: ctx is already cancelled, which would make Shutdown abort immediately.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return httpServer.Shutdown(shutdownCtx)
 	})
 
 	g.Go(func() error {
-		fmt.Printf("starting HTTP server on %s\n", addr)
+		a.logger.Info("starting HTTP server", "addr", addr)
 		err := httpServer.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
 			return err
@@ -55,10 +74,16 @@ func (a *Api) Run(ctx context.Context, addr string) error {
 
 func (a *Api) setupRouter() {
 	a.router = chi.NewRouter()
-	a.router.Use(middleware.Logger)
+	a.router.Use(middleware.RequestID)
+	a.router.Use(middleware.Recoverer)
+	a.router.Use(platform.RequestLogging(a.logger))
 
-	a.router.Get("/ping", a.PingHandler())
-	a.router.Get("/swagger/*", a.SwaggerHandler())
+	a.router.Get("/ping", handlers.PingHandler())
+	a.router.Get("/swagger/*", handlers.SwaggerHandler())
+	a.router.Handle("/metrics", handlers.MetricsHandler())
 
-	a.router.Get("/api/payments/{id}", a.GetPaymentHandler())
+	a.router.Route("/api/payments", func(r chi.Router) {
+		r.Post("/", a.paymentsHandler.PostHandler())
+		r.Get("/{id}", a.paymentsHandler.GetHandler())
+	})
 }

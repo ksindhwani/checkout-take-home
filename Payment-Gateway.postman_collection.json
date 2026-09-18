@@ -1,0 +1,204 @@
+{
+	"info": {
+		"name": "Payment Gateway",
+		"description": "Manual test collection for the Checkout.com take-home payment gateway. Requires the gateway (:8090) and bank simulator (:8080) running, e.g. `docker-compose up --build`.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "baseUrl", "value": "http://localhost:8090", "type": "string" },
+		{ "key": "paymentId", "value": "", "type": "string" },
+		{ "key": "idemKey", "value": "", "type": "string" }
+	],
+	"item": [
+		{
+			"name": "Health & Observability",
+			"item": [
+				{
+					"name": "Ping",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": { "raw": "{{baseUrl}}/ping", "host": ["{{baseUrl}}"], "path": ["ping"] }
+					}
+				},
+				{
+					"name": "Prometheus Metrics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": { "raw": "{{baseUrl}}/metrics", "host": ["{{baseUrl}}"], "path": ["metrics"] }
+					}
+				},
+				{
+					"name": "Swagger Spec (JSON)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": { "raw": "{{baseUrl}}/swagger/doc.json", "host": ["{{baseUrl}}"], "path": ["swagger", "doc.json"] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Payments",
+			"item": [
+				{
+					"name": "Create Payment - Authorized (card ends odd)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('status is 201', () => pm.response.to.have.status(201));",
+									"const json = pm.response.json();",
+									"if (json.id) { pm.collectionVariables.set('paymentId', json.id); }"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"card_number\": \"2222405343248871\",\n  \"expiry_month\": 4,\n  \"expiry_year\": 2030,\n  \"currency\": \"GBP\",\n  \"amount\": 100,\n  \"cvv\": \"123\"\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/payments", "host": ["{{baseUrl}}"], "path": ["api", "payments"] },
+						"description": "Card ending in an odd digit (1,3,5,7,9) is authorized by the bank simulator. Saves the returned id into {{paymentId}} for the GET request below."
+					}
+				},
+				{
+					"name": "Create Payment - Declined (card ends even)",
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"card_number\": \"2222405343248872\",\n  \"expiry_month\": 4,\n  \"expiry_year\": 2030,\n  \"currency\": \"GBP\",\n  \"amount\": 100,\n  \"cvv\": \"123\"\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/payments", "host": ["{{baseUrl}}"], "path": ["api", "payments"] },
+						"description": "Card ending in an even digit (2,4,6,8) is declined by the bank simulator. Still 201 Created, status: Declined."
+					}
+				},
+				{
+					"name": "Create Payment - Bank Unavailable (card ends 0)",
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"card_number\": \"2222405343248870\",\n  \"expiry_month\": 4,\n  \"expiry_year\": 2030,\n  \"currency\": \"GBP\",\n  \"amount\": 100,\n  \"cvv\": \"123\"\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/payments", "host": ["{{baseUrl}}"], "path": ["api", "payments"] },
+						"description": "Card ending in 0 makes the bank simulator return 503. The gateway maps this to 502 Bad Gateway and persists nothing."
+					}
+				},
+				{
+					"name": "Create Payment - Rejected (validation errors)",
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"card_number\": \"123\",\n  \"expiry_month\": 13,\n  \"expiry_year\": 2020,\n  \"currency\": \"JPY\",\n  \"amount\": 0,\n  \"cvv\": \"12\"\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/payments", "host": ["{{baseUrl}}"], "path": ["api", "payments"] },
+						"description": "Multiple invalid fields at once (short card number, invalid month, past expiry, unsupported currency, zero amount, short CVV) — 400 with every failing field listed, never reaches the bank."
+					}
+				},
+				{
+					"name": "Get Payment (uses saved paymentId)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/payments/{{paymentId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "payments", "{{paymentId}}"]
+						},
+						"description": "Run 'Create Payment - Authorized' first so {{paymentId}} is populated."
+					}
+				},
+				{
+					"name": "Get Payment - Not Found",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/payments/does-not-exist",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "payments", "does-not-exist"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Idempotency",
+			"item": [
+				{
+					"name": "1. Create Payment (Idempotency-Key)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (!pm.collectionVariables.get('idemKey')) {",
+									"  pm.collectionVariables.set('idemKey', pm.variables.replaceIn('{{$guid}}'));",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Idempotency-Key", "value": "{{idemKey}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"card_number\": \"2222405343248871\",\n  \"expiry_month\": 4,\n  \"expiry_year\": 2030,\n  \"currency\": \"GBP\",\n  \"amount\": 500,\n  \"cvv\": \"123\"\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/payments", "host": ["{{baseUrl}}"], "path": ["api", "payments"] },
+						"description": "Generates a fresh {{idemKey}} the first time this collection runs, then reuses it for the next two requests."
+					}
+				},
+				{
+					"name": "2. Retry Same Body (expect identical replay)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Idempotency-Key", "value": "{{idemKey}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"card_number\": \"2222405343248871\",\n  \"expiry_month\": 4,\n  \"expiry_year\": 2030,\n  \"currency\": \"GBP\",\n  \"amount\": 500,\n  \"cvv\": \"123\"\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/payments", "host": ["{{baseUrl}}"], "path": ["api", "payments"] },
+						"description": "Same key, same body as request 1 — returns the exact same cached response (same id), the bank is not called a second time."
+					}
+				},
+				{
+					"name": "3. Retry Different Body Same Key (expect 422)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Idempotency-Key", "value": "{{idemKey}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"card_number\": \"2222405343248871\",\n  \"expiry_month\": 4,\n  \"expiry_year\": 2030,\n  \"currency\": \"GBP\",\n  \"amount\": 999,\n  \"cvv\": \"123\"\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/payments", "host": ["{{baseUrl}}"], "path": ["api", "payments"] },
+						"description": "Same key as request 1, but a different amount — 422 idempotency_key_conflict, since reusing a key for a different payment is rejected rather than silently processed or replayed."
+					}
+				}
+			]
+		}
+	]
+}

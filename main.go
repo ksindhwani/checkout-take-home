@@ -9,6 +9,7 @@ import (
 
 	"github.com/cko-recruitment/payment-gateway-challenge-go/docs"
 	"github.com/cko-recruitment/payment-gateway-challenge-go/internal/api"
+	"github.com/cko-recruitment/payment-gateway-challenge-go/internal/config"
 )
 
 var (
@@ -20,10 +21,8 @@ var (
 //	@title			Payment Gateway Challenge Go
 //	@description	Interview challenge for building a Payment Gateway - Go version
 
-//	@host		localhost:8090
-//	@BasePath	/
-
-// @securityDefinitions.basic	BasicAuth
+// @host		localhost:8090
+// @BasePath	/
 func main() {
 	fmt.Printf("version %s, commit %s, built at %s\n", version, commit, date)
 	docs.SwaggerInfo.Version = version
@@ -54,8 +53,10 @@ func run() error {
 		}
 	}()
 
-	api := api.New()
-	if err := api.Run(ctx, ":8090"); err != nil {
+	cfg := config.Load()
+
+	a := api.New(cfg)
+	if err := a.Run(ctx, cfg.Addr); err != nil {
 		return err
 	}
 

@@ -11,6 +11,9 @@
 # Test binary, built with `go test -c`
 *.test
 
+# Delve debug binaries left behind by `dlv debug` / VS Code Go debugging
+__debug_bin*
+
 # Code coverage profiles and other test artifacts
 *.out
 coverage.*
@@ -18,7 +21,7 @@ coverage.*
 profile.cov
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+vendor/
 
 # Go workspace file
 go.work

@@ -1,0 +1,33 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Launch Payment Gateway",
+			"type": "go",
+			"request": "launch",
+			"mode": "debug",
+			"program": "${workspaceFolder}",
+			"cwd": "${workspaceFolder}",
+			"console": "integratedTerminal",
+			"preLaunchTask": "Start bank simulator"
+		},
+		{
+			"name": "Debug Current Package Tests",
+			"type": "go",
+			"request": "launch",
+			"mode": "test",
+			"program": "${fileDirname}",
+			"cwd": "${workspaceFolder}"
+		},
+		{
+			"name": "Debug Bank Client Integration Tests",
+			"type": "go",
+			"request": "launch",
+			"mode": "test",
+			"program": "${workspaceFolder}/internal/bank",
+			"cwd": "${workspaceFolder}",
+			"buildFlags": "-tags=integration",
+			"preLaunchTask": "Start bank simulator"
+		}
+	]
+}
