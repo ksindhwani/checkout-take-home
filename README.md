@@ -357,3 +357,4 @@ draining in-flight requests, so shutdown now gets its own 10-second timeout cont
   scope.
 - **Distributed tracing** (OpenTelemetry), to follow a request across the gateway and the
   simulated bank, complementing the metrics and structured logs that already exist.
+
