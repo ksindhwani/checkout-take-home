@@ -42,9 +42,11 @@ func New(cfg config.Config) *Api {
 
 func (a *Api) Run(ctx context.Context, addr string) error {
 	httpServer := &http.Server{
-		Addr:        addr,
-		Handler:     a.router,
-		BaseContext: func(_ net.Listener) context.Context { return ctx },
+		Addr:    addr,
+		Handler: a.router,
+		// Detached from ctx's cancellation so a shutdown signal doesn't abort
+		// in-flight requests; Shutdown below waits for them to finish instead.
+		BaseContext: func(_ net.Listener) context.Context { return context.WithoutCancel(ctx) },
 	}
 
 	g, ctx := errgroup.WithContext(ctx)

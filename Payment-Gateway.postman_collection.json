@@ -104,7 +104,7 @@
 							"raw": "{\n  \"card_number\": \"123\",\n  \"expiry_month\": 13,\n  \"expiry_year\": 2020,\n  \"currency\": \"JPY\",\n  \"amount\": 0,\n  \"cvv\": \"12\"\n}"
 						},
 						"url": { "raw": "{{baseUrl}}/api/payments", "host": ["{{baseUrl}}"], "path": ["api", "payments"] },
-						"description": "Multiple invalid fields at once (short card number, invalid month, past expiry, unsupported currency, zero amount, short CVV) — 400 with every failing field listed, never reaches the bank."
+						"description": "Multiple invalid fields at once (short card number, invalid month, past expiry, unsupported currency, zero amount, short CVV) — 422 with every failing field listed, never reaches the bank."
 					}
 				},
 				{

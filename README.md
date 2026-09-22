@@ -176,7 +176,7 @@ curl -i -X POST http://localhost:8090/api/payments \
     "cvv": "12"
   }'
 ```
-Expect `400 Bad Request` with every invalid field listed under `error.fields`.
+Expect `422 Unprocessable Entity` with every invalid field listed under `error.fields`.
 
 **6. Retrieve the payment from step 2:**
 ```bash
@@ -241,7 +241,7 @@ make test-integration  # requires: docker-compose up -d bank_simulator
   `docker-compose`. It's excluded from the default `go test ./...` run so the suite stays fast
   and has no external dependency by default.
 - **Handlers** (`internal/handlers`) are tested end-to-end through the router with `httptest`,
-  covering the full status-code matrix (201/400/404/502) and malformed JSON.
+  covering the full status-code matrix (201/400/404/409/422/502) and malformed JSON.
 - **Repository** has a concurrent read/write test, run with `-race`, since it backs a server
   that will receive concurrent requests.
 - **Idempotency** (`internal/idempotency`) has unit tests for the store's reserve/complete/
@@ -275,7 +275,16 @@ incremented so it's visible operationally.
 
 **`201 Created` for both Authorized and Declined.** Both are a successfully created payment
 resource in a terminal state, retrievable afterwards via `GET /api/payments/{id}`. Only a
-`Rejected` request (`400`) creates nothing.
+`Rejected` request (`422`) creates nothing.
+
+**`400` vs `422`.** The spec defines "Rejected" but not an HTTP status. A body that isn't valid
+JSON returns `400 Bad Request`, since the server couldn't parse it at all. A body that parses
+fine but fails the field rules returns `422 Unprocessable Entity`, since the request was
+understood and its content was rejected. The same `422` is used when an `Idempotency-Key` is
+reused with a different body, so both "well-formed but semantically unacceptable" cases share
+one status. Clients shouldn't rely on the status alone: every error body carries a
+machine-readable `error.code` (`invalid_request`, `validation_error`,
+`idempotency_key_conflict`).
 
 **Rejected responses return per-field validation errors**, for example
 `{"error":{"fields":{"cvv":"must be 3-4 characters long"}}}`, aggregating every failing field

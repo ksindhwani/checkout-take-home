@@ -152,7 +152,7 @@ func TestPostHandler_Rejected_InvalidField(t *testing.T) {
 
 	w := postPayment(r, invalid, "")
 
-	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Equal(t, http.StatusUnprocessableEntity, w.Code)
 
 	var errResp errorResponse
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&errResp))

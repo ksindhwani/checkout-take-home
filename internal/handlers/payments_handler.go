@@ -37,9 +37,9 @@ func NewPaymentsHandler(s *service.PaymentService) *PaymentsHandler {
 //	@Param			Idempotency-Key	header		string						false	"Client-generated key that makes retrying this request safe"
 //	@Param			request			body		models.PostPaymentRequest	true	"Payment details"
 //	@Success		201				{object}	models.Payment
-//	@Failure		400				{object}	errorResponse	"Rejected: invalid request"
+//	@Failure		400				{object}	errorResponse	"Malformed request body"
 //	@Failure		409				{object}	errorResponse	"A request with this Idempotency-Key is already in progress"
-//	@Failure		422				{object}	errorResponse	"Idempotency-Key reused with a different request body"
+//	@Failure		422				{object}	errorResponse	"Rejected: one or more fields failed validation, or Idempotency-Key was reused with a different request body"
 //	@Failure		502				{object}	errorResponse	"Bank unavailable"
 //	@Router			/api/payments [post]
 func (h *PaymentsHandler) PostHandler() http.HandlerFunc {
@@ -109,7 +109,7 @@ func (h *PaymentsHandler) createPayment(ctx context.Context, req models.PostPaym
 	payment, verr, err := h.service.CreatePayment(ctx, req)
 	switch {
 	case verr != nil:
-		return http.StatusBadRequest, mustMarshal(errorResponse{
+		return http.StatusUnprocessableEntity, mustMarshal(errorResponse{
 			Error: errorDetail{Code: "validation_error", Fields: verr.Fields},
 		})
 	case errors.Is(err, service.ErrBankUnavailable):

@@ -53,7 +53,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Rejected: invalid request",
+                        "description": "Malformed request body",
                         "schema": {
                             "$ref": "#/definitions/handlers.errorResponse"
                         }
@@ -65,7 +65,7 @@ const docTemplate = `{
                         }
                     },
                     "422": {
-                        "description": "Idempotency-Key reused with a different request body",
+                        "description": "Rejected: one or more fields failed validation, or Idempotency-Key was reused with a different request body",
                         "schema": {
                             "$ref": "#/definitions/handlers.errorResponse"
                         }
